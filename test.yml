@@ -1,0 +1,13 @@
+# promptfooconfig.yaml
+description: deepseek test
+prompts:
+  - "你好"
+providers:
+  - id: deepseek:deepseek-v4-flash
+    config:
+      apiKey: sk-15ad4249b439477f9f7c69f099cf4ca5
+tests:
+  - vars: {}
+    assert:
+      - type: contains
+        value: "你好"
