@@ -44,7 +44,7 @@ prompts:
 providers:
   - id: deepseek:deepseek-v4-flash
     config:
-      apiKey: sk-15ad4249b439477f9f7c69f099cf4ca5
+      apiKeyEnvar: DEEPSEEK_API_KEY  # scrubbed: 原硬编码 key 已移入 .env；git 历史中的旧值需轮换
       temperature: 0.2
       max_tokens: 1200
       top_p: 0.2

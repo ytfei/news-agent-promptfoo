@@ -1,0 +1,21 @@
+{
+  "name": "news-agent-prompt-evals",
+  "private": true,
+  "description": "半程观测录 公众号写作系统提示词评测（promptfoo 单栈）",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "eval": "mkdir -p reports && promptfoo eval -c evals/suites/writer.yaml -o reports/writer.json --no-progress-bar",
+    "eval:smoke": "promptfoo eval -c evals/suites/smoke.yaml",
+    "eval:anchors": "mkdir -p reports && promptfoo eval -c evals/suites/judge-anchors.yaml -o reports/judge-anchors.json --no-progress-bar",
+    "eval:redteam": "mkdir -p reports && promptfoo eval -c evals/suites/redteam.yaml -o reports/redteam.json --no-progress-bar",
+    "eval:all": "bash scripts/run-all.sh",
+    "eval:changed": "node scripts/changed-suites.mjs --run",
+    "summary": "node scripts/summary.mjs reports/*.json",
+    "view": "promptfoo view"
+  },
+  "devDependencies": {
+    "promptfoo": "0.125.1"
+  }
+}

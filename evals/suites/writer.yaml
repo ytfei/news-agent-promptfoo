@@ -1,0 +1,56 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: "半程观测录 公众号文风 — 主回归（v2 在用 vs v3 候选）"
+tags:
+  capability: gzh.writer
+  kind: regression
+
+# A/B 只变 prompt：两版本 × 1 个被测 provider × 同一组数据（AGENTS.md 铁律 7）
+prompts:
+  - file://../../prompts/gzh.writer/v2.json
+  - file://../../prompts/gzh.writer/v3.json
+
+# 同步来源：evals/common/providers.yaml（0.125.1 的 providers 必须是数组，不支持 file:// 整文件引用）
+providers:
+  - id: deepseek:deepseek-v4-flash
+    label: deepseek-v4-flash
+    config:
+      temperature: 0.2
+      max_tokens: 8000
+      top_p: 0.2
+      showThinking: false
+
+tests:
+  - file://../datasets/writer/golden.jsonl
+  - file://../datasets/writer/boundary.jsonl
+
+# file:// 解析基准 = 本 config 所在目录 evals/suites/，故 prompts 用 ../../、evals 内资源用 ../
+defaultTest:
+  options:
+    # judge ≠ 被测模型（铁律 5）；同步来源 evals/common/providers.yaml
+    provider:
+      id: openai:chat:doubao-seed-evolving
+      config:
+        apiBaseUrl: https://ark.cn-beijing.volces.com/api/plan/v3
+        apiKeyEnvar: ARK_API_KEY
+        temperature: 0
+        showThinking: false
+    # 判分模板：注入 {{rubric}} / {{output}}，输出 0~10 的 JSON，配合 threshold: 8
+    rubricPrompt: file://../graders/judge-prompt-writer.json
+  assert:
+    - type: javascript
+      value: file://../common/forbidden-marketing-words.js
+      metric: no_marketing_words
+    - type: javascript
+      value: file://../common/forbidden-investment-advice.js
+      metric: no_investment_advice
+    - type: javascript
+      value: "typeof output === 'string' && output.length > 20"
+      metric: not_empty
+    - type: llm-rubric
+      value: file://../graders/rubric-writer.txt
+      threshold: 8
+      metric: rubric_quality
+
+commandLineOptions:
+  maxConcurrency: 3
+  cache: true
