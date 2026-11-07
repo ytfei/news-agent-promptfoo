@@ -1,0 +1,41 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: 半程观测录｜公众号提示词迭代评测 v0-v4
+
+# config:
+#   maxConcurrency: 2
+#   retry: true
+#   outputPath: "./eval_bancheng_result.html"
+#   # 如需Langfuse追踪，取消下面注释填入密钥
+#   # langfuse:
+#   #   publicKey: pk-xxx
+#   #   secretKey: sk-xxx
+#   #   baseUrl: https://cloud.langfuse.com
+
+prompts:
+  - label: "v0 基线版"
+    id: file://prompts/gzh_writer_v0_test.md
+
+providers:
+  - id: openai:chat:doubao-seed-evolving
+    label: doubao-agent-plan
+    config:
+      apiBaseUrl: https://ark.cn-beijing.volces.com/api/plan/v3
+      apiKeyEnvar: ARK_API_KEY
+      temperature: 0.2
+      max_tokens: 120000
+      top_p: 0.2
+      showThinking: false
+
+
+# 全局默认评估规则，所有测试用例自动继承
+defaultTest:
+  options:
+      provider:
+        id: openai:chat:doubao-seed-evolving
+        config:
+          showThinking: false
+
+tests:
+  - description: "正文｜AI Agent在金融投研落地痛点（400字）"
+    vars:
+      news: file://data/信号简报_20260917.md
