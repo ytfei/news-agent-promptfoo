@@ -39,6 +39,7 @@
 | 输入变量 `raw_news` | `news`（唯一变量；旧 `{{market}}` / `{{user_input}}` 已删除） |
 | `registry.yaml` 的 `suite`（单值） | `suites`（列表，显式列出全部 4 个 suite） |
 | `file://` 相对路径基准 | **配置文件所在目录** `evals/suites/`：prompts 用 `../../`、evals 内资源用 `../` |
+| 包管理与锁文件 | pnpm：`pnpm install`、`pnpm exec promptfoo`；锁文件 `pnpm-lock.yaml`（CI 用 `--frozen-lockfile`） |
 
 ### 版本校正（已对 0.125.1 源码与 CLI 实测；正文示例以此为准）
 
@@ -621,7 +622,7 @@ for entry in "${SUITES[@]}"; do
   name="${entry%%:*}"
   cfg="${entry##*:}"
   echo "▶ running suite: ${name}"
-  if ! npx promptfoo eval -c "$cfg" -o "reports/${name}.json" --no-progress-bar; then
+  if ! pnpm exec promptfoo eval -c "$cfg" -o "reports/${name}.json" --no-progress-bar; then
     FAILED=1
     echo "✗ suite failed: ${name}"
   fi
@@ -726,7 +727,7 @@ module.exports = (output) => {
 | 对比实验前手动清目标 namespace | `promptfoo cache clear --namespace <ns>`（若当前版本无此命令，直接 `rm -rf .promptfoo/cache` 中对应目录） |
 | judge 结果是否缓存 | 建议缓存，但改 rubric 后必须清 |
 
-`commandLineOptions.cache` 与 namespace 的字段名在不同版本有差异，**以 `npx promptfoo@latest --help` 为准**，本规范要求的是"每个 suite 一份独立缓存"这个事实，而不是具体字段拼写。
+`commandLineOptions.cache` 与 namespace 的字段名在不同版本有差异，**以 `pnpm dlx promptfoo@latest --help` 为准**，本规范要求的是"每个 suite 一份独立缓存"这个事实，而不是具体字段拼写。
 
 ### 10.3 并发
 
@@ -741,7 +742,7 @@ module.exports = (output) => {
 
 ```bash
 # 1. 先只跑 3 条，确认 prompt 能渲染、变量没拼错
-npx promptfoo eval -c evals/suites/summarize.yaml --filter-first-n 3
+pnpm exec promptfoo eval -c evals/suites/summarize.yaml --filter-first-n 3
 
 # 2. 只跑确定性断言（临时把 llm-rubric 注释掉），确认结构没问题
 # 3. 加回 rubric，跑 5~10 条，人工看分是否合理
@@ -752,7 +753,7 @@ npx promptfoo eval -c evals/suites/summarize.yaml --filter-first-n 3
 ### 10.5 报告
 
 - 每 suite 一个 `reports/<name>.json`，用于脚本汇总
-- 需要给人看时：`npx promptfoo eval -c <cfg> --output reports/<name>.html`
+- 需要给人看时：`pnpm exec promptfoo eval -c <cfg> --output reports/<name>.html`
 - 报告进 `reports/` 且 `gitignore`，只在 CI 里作为 artifact 上传
 
 ---
@@ -822,11 +823,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: pnpm
 
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       - name: Resolve changed suites
         id: changed
@@ -837,7 +843,7 @@ jobs:
           while read -r cfg; do
             [ -z "$cfg" ] && continue
             echo "::group::eval $cfg"
-            npx promptfoo eval -c "$cfg" \
+            pnpm exec promptfoo eval -c "$cfg" \
               -o "reports/$(basename "$cfg" .yaml).json" \
               --no-progress-bar
             echo "::endgroup::"
@@ -992,7 +998,7 @@ min/
 }
 ```
 
-> `0.100.0` 为占位版本号，安装时换成 `npm view promptfoo version` 的真实当前版本，然后**写死**。
+> `0.100.0` 为占位版本号，安装时换成 `pnpm view promptfoo version` 的真实当前版本，然后**写死**。
 
 **2) `prompts/finance.news.summarize/v2.json`**
 
@@ -1078,12 +1084,12 @@ commandLineOptions:
 **8) 跑起来**
 
 ```bash
-npm i
+pnpm install
 export OPENAI_API_KEY=xxx     # 或用 OPENAI_BASE_URL 指向代理
 
-npm run eval:smoke            # 先跑 3 条确认链路
-npm run eval                  # 全量 4 条，产出 reports/summarize.json
-npm run view                  # 打开交互式报告，看每条断言明细
+pnpm run eval:smoke            # 先跑 3 条确认链路
+pnpm run eval                  # 全量 4 条，产出 reports/summarize.json
+pnpm run view                  # 打开交互式报告，看每条断言明细
 ```
 
 **9) 验证清单（跑完必看）**

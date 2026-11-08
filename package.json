@@ -3,7 +3,8 @@
   "private": true,
   "description": "半程观测录 公众号写作系统提示词评测（promptfoo 单栈）",
   "engines": {
-    "node": ">=22.22.0"
+    "node": ">=22.22.0",
+    "pnpm": ">=12"
   },
   "scripts": {
     "eval": "mkdir -p reports && promptfoo eval -c evals/suites/writer.yaml -o reports/writer.json --no-progress-bar",

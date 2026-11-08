@@ -15,19 +15,19 @@ There is **no application code** — the "source" is YAML config + versioned pro
 Always pass `-c <config>` explicitly. `.env` is auto-loaded by promptfoo from cwd (gitignored; needs `ARK_API_KEY` and `DEEPSEEK_API_KEY`).
 
 ```bash
-npm ci                              # first time; lock file is committed
-npm run eval:smoke                  # 2 cases, fast end-to-end self-check
-npm run eval                       # main golden regression -> reports/writer.json
-npm run eval:anchors                # rubric calibration (must be 4/4)
-npm run eval:redteam                # injection/越权, warn-only
-npm run eval:all                    # bash scripts/run-all.sh: all 4 suites + summary
-npm run eval:changed                # git diff -> only affected suites
-npm run summary                     # node scripts/summary.mjs reports/*.json
-npm run view                        # web viewer for last run
+pnpm install                         # first time; lock file is committed
+pnpm run eval:smoke                  # 2 cases, fast end-to-end self-check
+pnpm run eval                        # main golden regression -> reports/writer.json
+pnpm run eval:anchors                # rubric calibration (must be 4/4)
+pnpm run eval:redteam                # injection/越权, warn-only
+pnpm run eval:all                    # bash scripts/run-all.sh: all 4 suites + summary
+pnpm run eval:changed                # git diff -> only affected suites
+pnpm run summary                     # node scripts/summary.mjs reports/*.json
+pnpm run view                        # web viewer for last run
 
 # Single case / single suite (0.125.1 flags)
-promptfoo eval -c evals/suites/writer.yaml --filter-pattern "信号简报"
-promptfoo eval -c evals/suites/writer.yaml -n 3          # --filter-first-n 3
+pnpm exec promptfoo eval -c evals/suites/writer.yaml --filter-pattern "信号简报"
+pnpm exec promptfoo eval -c evals/suites/writer.yaml -n 3          # --filter-first-n 3
 node scripts/summary.mjs reports/*.json --gate          # PR gate by pass rate
 ```
 
@@ -71,7 +71,7 @@ legacy/                      # 归档的旧扁平配置
 - Word-list asserts are heuristic: bare `在看`/`目标价` are NOT matched (they false-positive on "大家都在看 GPU" and on quoting attack text). Tighten in `evals/common/*.js` and add a matching boundary sample when changing the lists.
 - `judge-anchors.yaml` uses `echo` + `{{output}}` to feed fixed candidate texts to the grader; pass anchors use `llm-rubric`, fail anchors `not-llm-rubric`. Calibration is correct when 4/4 pass (observed 9–10 vs 0–1). Re-run it after **any** rubric edit.
 - CI/`run-all.sh` enumerate all 4 suites explicitly — do not derive suites from `registry.yaml` (it has one entry; the auxiliary suites would never run). 0.125.1 has no `--ci`; the gate is `summary.mjs --gate`. Per AGENTS.md §11.2 it blocks **only on `golden` (and `regression`) rows of the `writer` suite**; `boundary` / `redteam` / `smoke` / `anchor` cases and the three auxiliary suites are reported but warn-only, even when `metadata.risk: high`. `writer.yaml` includes both `golden.jsonl` and `boundary.jsonl`, so a boundary finding (e.g. the model writing the banned word `暴涨`) legitimately lowers the displayed pass_rate without failing the gate — review it and回灌 a regression sample instead.
-- `promptfoo eval` stores results in its local DB; `npm run view` works without `-o`. Reports go to gitignored `reports/`.
+- `promptfoo eval` stores results in its local DB; `pnpm run view` works without `-o`. Reports go to gitignored `reports/`.
 
 ## Secrets / legacy
 

@@ -86,8 +86,8 @@ if (args.includes('--output-list')) {
   for (const s of suites) {
     console.log(`▶ ${s}`);
     const r = spawnSync(
-      'npx',
-      ['promptfoo', 'eval', '-c', cfg(s), '-o', `reports/${s}.json`, '--no-progress-bar'],
+      'pnpm',
+      ['exec', 'promptfoo', 'eval', '-c', cfg(s), '-o', `reports/${s}.json`, '--no-progress-bar'],
       { stdio: 'inherit' },
     );
     if (r.status !== 0) failed = true;

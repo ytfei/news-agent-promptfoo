@@ -17,7 +17,7 @@ for entry in "${SUITES[@]}"; do
   name="${entry%%:*}"
   cfg="${entry##*:}"
   echo "▶ running suite: ${name}"
-  if ! npx promptfoo eval -c "$cfg" -o "reports/${name}.json" --no-progress-bar; then
+  if ! pnpm exec promptfoo eval -c "$cfg" -o "reports/${name}.json" --no-progress-bar; then
     FAILED=1
     echo "✗ suite failed: ${name}"
   fi

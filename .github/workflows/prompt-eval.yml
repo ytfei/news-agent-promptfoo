@@ -7,7 +7,7 @@ on:
       - 'evals/**'
       - 'scripts/**'
       - 'package.json'
-      - 'package-lock.json'
+      - 'pnpm-lock.yaml'
       - '.github/workflows/**'
   schedule:
     - cron: '0 18 * * *' # 每日 UTC18 = 北京 02:00
@@ -24,13 +24,19 @@ jobs:
         with:
           fetch-depth: 0
 
+      # pnpm 必须在 setup-node 之前，cache: pnpm 才能读到 store
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
       - uses: actions/setup-node@v4
         with:
-          # promptfoo 0.125.1 的 engines 要求 node >=22.22.0，不能用 20
+          # promptfoo 0.125.1 的 engines 要求 node >=22.22.0
           node-version: 22
+          cache: pnpm
 
       # promptfoo 版本在 package.json 写死为 0.125.1，不用 ^，防止断言语义漂移
-      - run: npm ci
+      - run: pnpm install --frozen-lockfile
 
       - name: Resolve changed suites
         run: |
@@ -52,7 +58,7 @@ jobs:
           while read -r cfg; do
             [ -z "$cfg" ] && continue
             echo "::group::eval $cfg"
-            npx promptfoo eval -c "$cfg" \
+            pnpm exec promptfoo eval -c "$cfg" \
               -o "reports/$(basename "$cfg" .yaml).json" \
               --no-progress-bar || echo "::warning::suite failed: $cfg"
             echo "::endgroup::"
