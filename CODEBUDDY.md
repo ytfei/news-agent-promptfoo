@@ -23,7 +23,7 @@ pnpm run eval:redteam                # injection/越权, warn-only
 pnpm run eval:all                    # bash scripts/run-all.sh: all 4 suites + summary
 pnpm run eval:changed                # git diff -> only affected suites
 pnpm run summary                     # node scripts/summary.mjs reports/*.json
-pnpm run view                        # web viewer for last run
+pnpm run eval:view                        # web viewer for last run
 
 # Single case / single suite (0.125.1 flags)
 pnpm exec promptfoo eval -c evals/suites/writer.yaml --filter-pattern "信号简报"

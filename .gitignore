@@ -4,3 +4,4 @@ reports/
 .promptfoo/
 pnpm-debug.log*
 .pnpm-store/
+.DS_Store

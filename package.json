@@ -14,7 +14,7 @@
     "eval:all": "bash scripts/run-all.sh",
     "eval:changed": "node scripts/changed-suites.mjs --run",
     "summary": "node scripts/summary.mjs reports/*.json",
-    "eval-view": "promptfoo view -y"
+    "eval:view": "promptfoo view -y"
   },
   "devDependencies": {
     "promptfoo": "0.125.1"
