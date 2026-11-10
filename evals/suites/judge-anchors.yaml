@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: "Judge rubric 锚点校准（4/4 结论正确才可用，AGENTS.md §7.3）"
+tags:
+  capability: gzh.writer
+  kind: calibration
+
+# 用 echo 把固定的候选文本原样喂给判分器，校准的是 rubric 本身，不是被测 prompt
+prompts:
+  - "{{output}}"
+providers:
+  - echo
+
+tests:
+  - file://../graders/judge-anchors/writer-pass.jsonl
+  - file://../graders/judge-anchors/writer-fail.jsonl
+
+# 断言写在每条锚点里：pass 用 llm-rubric，fail 用 not-llm-rubric
+# 校准正确时 4 条全部 PASS；任一方向反了说明 rubric 措辞或阈值需要重写
+defaultTest:
+  options:
+    provider:
+      id: openai:chat:doubao-seed-evolving
+      config:
+        apiBaseUrl: https://ark.cn-beijing.volces.com/api/plan/v3
+        apiKeyEnvar: ARK_API_KEY
+        temperature: 0
+        showThinking: false
+    rubricPrompt: file://../graders/judge-prompt-writer.json
+
+commandLineOptions:
+  maxConcurrency: 3
+  cache: true

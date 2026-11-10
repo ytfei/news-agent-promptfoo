@@ -1,0 +1,82 @@
+name: prompt-eval
+
+on:
+  pull_request:
+    paths:
+      - 'prompts/**'
+      - 'evals/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/**'
+  schedule:
+    - cron: '0 18 * * *' # 每日 UTC18 = 北京 02:00
+  workflow_dispatch:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    env:
+      DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+      ARK_API_KEY: ${{ secrets.ARK_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # pnpm 必须在 setup-node 之前，cache: pnpm 才能读到 store
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+
+      - uses: actions/setup-node@v4
+        with:
+          # promptfoo 0.125.1 的 engines 要求 node >=22.22.0
+          node-version: 22
+          cache: pnpm
+
+      # promptfoo 版本在 package.json 写死为 0.125.1，不用 ^，防止断言语义漂移
+      - run: pnpm install --frozen-lockfile
+
+      - name: Resolve changed suites
+        run: |
+          mkdir -p reports
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            node scripts/changed-suites.mjs --output-list > /tmp/suites.txt
+          else
+            printf '%s\n' \
+              evals/suites/writer.yaml \
+              evals/suites/smoke.yaml \
+              evals/suites/judge-anchors.yaml \
+              evals/suites/redteam.yaml > /tmp/suites.txt
+          fi
+          cat /tmp/suites.txt
+
+      - name: Run eval
+        run: |
+          # 单个 suite 失败不立刻中断：先把所有报告产出，再由 gate 统一判定
+          while read -r cfg; do
+            [ -z "$cfg" ] && continue
+            echo "::group::eval $cfg"
+            pnpm exec promptfoo eval -c "$cfg" \
+              -o "reports/$(basename "$cfg" .yaml).json" \
+              --no-progress-bar || echo "::warning::suite failed: $cfg"
+            echo "::endgroup::"
+          done < /tmp/suites.txt
+          # 每个待跑 suite 都必须产出报告，否则视为链路失败
+          while read -r cfg; do
+            [ -z "$cfg" ] && continue
+            test -f "reports/$(basename "$cfg" .yaml).json" || {
+              echo "::error::missing report for $cfg"; exit 1;
+            }
+          done < /tmp/suites.txt
+
+      # 0.125.1 没有 --ci 参数；门禁由 summary.mjs --gate 按通过率判定
+      - name: Gate by pass rate
+        run: node scripts/summary.mjs reports/*.json --gate
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: promptfoo-reports
+          path: reports/

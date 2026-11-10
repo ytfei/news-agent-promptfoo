@@ -2,70 +2,84 @@
 
 This file provides guidance to CodeBuddy Code when working with code in this repository.
 
-See `AGENTS.md` for the full current-state guide. `docs/prompt-eval-spec.md` and `docs/practice.md` are aspirational designs (an `evals/` + JSONL + CI structure) that this repo does **not** currently use — don't go looking for `evals/suites/`, `registry.yaml`, or `package.json`.
-
 ## What this repo is
 
-A [promptfoo](https://promptfoo.dev) project for evaluating and iterating the **system prompt** of a WeChat public-account ("公众号") writer named **半程观测录**. The goal is to compare multiple versions of a Chinese writing-style system prompt and score them on a fixed 5-dimension rubric (人设视角 / 营销词与绝对化 / 句式段落 / 表达风格 / 合规边界, 0–2 each, /10 total).
+A [promptfoo](https://promptfoo.dev) project that evaluates **one** capability: the system prompt of a Chinese WeChat public-account ("公众号") writer named **半程观测录**. It A/B-compares versioned system prompts against a fixed 5-dimension style rubric (人设视角 / 营销词与绝对化 / 句式段落 / 表达风格 / 合规边界, 0–2 each, **/10 total**, pass line 8/10).
 
-There is no application code to build — the "code" here is YAML config + Markdown prompt files. There is no `package.json`, build, or unit tests. Everything runs through the global `promptfoo` CLI (`npx promptfoo` works too; check the version with `promptfoo --version`).
+There is **no application code** — the "source" is YAML config + versioned prompt JSON + JSONL datasets. No build, no unit tests. `promptfoo 0.125.1` is pinned in `package.json` and requires **Node >=22.22.0** (declared in `engines`; CI uses Node 22). Check `promptfoo --version` / `node --version`.
+
+`AGENTS.md` is the governing engineering spec (ten 铁律, directory conventions, assertion layering, CI gating). This file describes the **current landed state**; §0.5 of `AGENTS.md` maps its generic `finance.*` examples onto this repo and records all 0.125.1 CLI corrections. `legacy/` holds the pre-restructure flat files (archived, not deleted); `legacy/docs/` holds two superseded design drafts.
 
 ## Common commands
 
+Always pass `-c <config>` explicitly. `.env` is auto-loaded by promptfoo from cwd (gitignored; needs `ARK_API_KEY` and `DEEPSEEK_API_KEY`).
+
 ```bash
-# Run the eval defined in the default config (promptfooconfig.yaml)
-promptfoo eval
+pnpm install                         # first time; lock file is committed
+pnpm run eval:smoke                  # 2 cases, fast end-to-end self-check
+pnpm run eval                        # main golden regression -> reports/writer.json
+pnpm run eval:anchors                # rubric calibration (must be 4/4)
+pnpm run eval:redteam                # injection/越权, warn-only
+pnpm run eval:all                    # bash scripts/run-all.sh: all 4 suites + summary
+pnpm run eval:changed                # git diff -> only affected suites
+pnpm run summary                     # node scripts/summary.mjs reports/*.json
+pnpm run eval:view                        # web viewer for last run
 
-# Run a specific config file — always pass -c explicitly
-promptfoo eval -c gzh_promptfoo.yml
-promptfoo eval -c gzh_promptfoo_v1_1.yml
-
-# Run a single test case by description substring
-promptfoo eval -c gzh_promptfoo.yml --filter "正文｜AI Agent"
-
-# Cheap smoke run
-promptfoo eval -c promptfooconfig.yaml --limit 3
-
-# Open the web viewer for the last run
-promptfoo view
-
-# Write results to a shareable HTML report
-promptfoo eval -c promptfooconfig.yaml --output ./eval_result.html
+# Single case / single suite (0.125.1 flags)
+pnpm exec promptfoo eval -c evals/suites/writer.yaml --filter-pattern "信号简报"
+pnpm exec promptfoo eval -c evals/suites/writer.yaml -n 3          # --filter-first-n 3
+node scripts/summary.mjs reports/*.json --gate          # PR gate by pass rate
 ```
 
-The default `promptfoo eval` (no `-c`) uses `promptfooconfig.yaml`. To avoid surprises, always pass `-c <file>` explicitly when working on a specific experiment. Secrets: `.env` holds `ARK_API_KEY` (gitignored) for `gzh_promptfoo_v1_1.yml`'s `apiKeyEnvar`. The `README.md` instruction to set `OPENAI_API_KEY` is promptfoo scaffold boilerplate, not the current experiment.
+**Flags that do NOT exist in 0.125.1:** `--limit`, `--filter`, `--ci`. Use `--filter-first-n`, `--filter-pattern`, and `summary.mjs --gate` respectively.
 
-## Repository layout
+## High-level architecture
 
-- `*.yml` — promptfoo experiment configs (the actual "source files").
-- `prompts/gzh_writer_v*.md` — versioned system-prompt templates, referenced from configs via `id: file://prompts/...`. These contain `{{news}}` / `{{market}}` placeholders filled by test `vars`; `gzh_writer_v0_test.md` has only `{{news}}`.
-- `data/信号简报_20260917.md` — the only input fixture, pulled into tests via `file://data/...`.
-- `.env` — holds `ARK_API_KEY` for the Volcengine Ark / Doubao provider.
+```
+prompts/gzh.writer/          # ★ 唯一权威来源：v0..v3.json (2-message chat arrays) + NOTES.md
+evals/
+  registry.yaml              # 1 条登记：id=gzh.writer, suites 列表, pass_threshold 0.8
+  suites/                    # writer / smoke / judge-anchors / redteam .yaml
+  datasets/writer/           # golden / boundary / redteam / smoke .jsonl + fixtures/信号简报
+  graders/                   # rubric-writer.txt, judge-prompt-writer.json,
+                             # rubric-redteam.txt, judge-prompt-redteam.json, judge-anchors/*.jsonl
+  common/                    # forbidden-*.js (确定性断言), providers.yaml (同步来源)
+scripts/                     # run-all.sh, changed-suites.mjs, summary.mjs
+.github/workflows/prompt-eval.yml
+reports/                     # gitignored 产物
+legacy/                      # 归档的旧扁平配置
+```
 
-### The config files and what each is for
+**How a run works:** a suite references `prompts/gzh.writer/vN.json` via `file://../../prompts/...` (base = `evals/suites/`). A JSONL row supplies **`vars.news`** — either a task instruction, or `file://../datasets/writer/fixtures/信号简报_20260917.md`. `{{news}}` is rendered into the user message. The tested provider is `deepseek:deepseek-v4-flash`; the **judge is a different model** (`openai:chat:doubao-seed-evolving` / Ark, `temperature: 0`) set under `defaultTest.options.provider` — no self-grading.
 
-- `promptfooconfig.yaml` — the promptfoo **default** config. **Inline prompts**: two `raw:` blocks (v1 基础版 / v2 负向约束+few-shot) using `{{user_input}}`. This is the only config with **active `llm-rubric` assertions** carrying the full 5-dimension scoring rubric. deepseek provider with a hardcoded `apiKey`; `max_tokens: 1200`.
-- `test.yml` — the actual throwaway smoke test: prompt "你好" plus one `contains` assertion, hardcoded deepseek key.
-- `gzh_promptfoo.yml` — **file-based prompts**: pulls `prompts/gzh_writer_v0.md` / `v1.md` / `v2.md` via `file://` (v3 commented out). deepseek provider, `max_tokens: 120000`. Its entire `defaultTest.assert` (blacklist words + 5-dimension rubric) is **commented out**, so runs currently produce ungraded output.
-- `gzh_promptfoo_v1.yml` — file-based, pulls `prompts/gzh_writer_v0_test.md` and injects `news` from `file://data/信号简报_20260917.md`. Same deepseek provider. No assertions.
-- `gzh_promptfoo_v1_1.yml` — same structure as `gzh_promptfoo_v1.yml` but swaps the provider to `openai:chat:doubao-seed-evolving` hitting the Volcengine Ark endpoint, with the key read from `ARK_API_KEY` (`apiKeyEnvar`). No assertions.
+`defaultTest.assert` (4 global, layered) = `no_marketing_words` + `no_investment_advice` (JS word/regex checks) + `not_empty` (JS) + `rubric_quality` (`llm-rubric`, `threshold: 8`). Per-case `assert` in JSONL is **additive** (verified: 4 global + 1 per-case = 5 componentResults). Length bounds live per-case because the three topic cases target 400/150/120 字.
 
-Add new experiment variants by copying one of the `gzh_promptfoo*.yml` files and either adding a new `prompts/gzh_writer_vN.md` or a new inline `raw:` block.
+**Keeping /10 semantics:** `llm-rubric`'s `value` is `rubric-writer.txt` (criteria), while `defaultTest.options.rubricPrompt` points to `judge-prompt-writer.json` — a chat-array grading template with `{{rubric}}`/`{{output}}`, an anti-injection section, a version header, and a forced `{"score":0-10,"pass":bool,"reason":"..."}`. Without this split, promptfoo's stock 0–1 grader makes `threshold: 8` unreachable. `registry.yaml` `pass_threshold: 0.8` == 8/10.
 
-## How a run works (the "big picture")
+**Redteam** is deliberately different: it uses `rubric-redteam.txt` + `judge-prompt-redteam.json` (LLM judge) instead of word-list asserts. A correctly-refusing model quotes the attack words while explaining why, and string matching cannot distinguish quoting from complying — it produced stable false positives. Redteam is warn-only and excluded from the gate.
 
-1. **Prompts** come from two sources: inline `raw:` strings, or `id: file://prompts/*.md` files. Both support `{{var}}` templating.
-2. **Providers** generate completions. Two are used: `deepseek:deepseek-v4-flash` and `openai:chat:doubao-seed-evolving` (Ark-compatible, key from `ARK_API_KEY`).
-3. **Tests** supply `vars` (literals or `file://` references) and **assertions**. The scoring mechanism is `type: llm-rubric` — a judge model (set under `defaultTest.options.provider`, currently the same model as the provider under test) grades each output against the 5-dimension rubric and returns a `/10` score plus a per-dimension breakdown and defect list. Only `promptfooconfig.yaml` has active assertions; the `gzh_promptfoo*.yml` configs currently generate output without grading.
-4. `defaultTest.options.provider` sets the judge model for all rubric assertions; per-test `assert` blocks only carry the rubric text.
+## Gotchas (verified against promptfoo 0.125.1)
 
-## Notes / gotchas
+- `file://` paths (including ones **inside JSONL** `vars` and `assert.value`) resolve from the **config file's directory**, not cwd. From `evals/suites/`: `../../prompts/...`, `../datasets/...`, `../graders/...`, `../common/...`.
+- Only variable is `{{news}}`. Old `{{market}}`/`{{user_input}}` placeholders were never supplied and rendered empty — do not reintroduce永远取不到值的占位符.
+- The real test option is `disableDefaultAsserts` (not `disableDefaultAssertions`); global + per-case asserts are concatenated.
+- `not-contains` `value` must be a **string/number** — arrays are rejected. Use `javascript` expressions or `contains-any` for multi-value.
+- `tags` must be a **record** (`tags: {capability: ..., kind: ...}`), not a YAML list.
+- `providers` must be an array; `providers: file://...yaml` is unsupported. Each suite inlines the two provider blocks with `evals/common/providers.yaml` as the single sync source.
+- 0.125.1 has **no `cache.namespace` config field** — only `commandLineOptions.cache: true`. Clear cache (`promptfoo cache clear` / `--no-cache`) before A/B comparisons.
+- The tested model is a reasoning model: `showThinking: false` keeps reasoning out of the article, but reasoning still consumes tokens. `max_tokens: 8000` is required; `1200` made long-brief cases emit an empty output.
+- Word-list asserts are heuristic: bare `在看`/`目标价` are NOT matched (they false-positive on "大家都在看 GPU" and on quoting attack text). Tighten in `evals/common/*.js` and add a matching boundary sample when changing the lists.
+- `judge-anchors.yaml` uses `echo` + `{{output}}` to feed fixed candidate texts to the grader; pass anchors use `llm-rubric`, fail anchors `not-llm-rubric`. Calibration is correct when 4/4 pass (observed 9–10 vs 0–1). Re-run it after **any** rubric edit.
+- CI/`run-all.sh` enumerate all 4 suites explicitly — do not derive suites from `registry.yaml` (it has one entry; the auxiliary suites would never run). 0.125.1 has no `--ci`; the gate is `summary.mjs --gate`. Per AGENTS.md §11.2 it blocks **only on `golden` (and `regression`) rows of the `writer` suite**; `boundary` / `redteam` / `smoke` / `anchor` cases and the three auxiliary suites are reported but warn-only, even when `metadata.risk: high`. `writer.yaml` includes both `golden.jsonl` and `boundary.jsonl`, so a boundary finding (e.g. the model writing the banned word `暴涨`) legitimately lowers the displayed pass_rate without failing the gate — review it and回灌 a regression sample instead.
+- `promptfoo eval` stores results in its local DB; `pnpm run view` works without `-o`. Reports go to gitignored `reports/`.
 
-- `promptfooconfig.yaml` and `test.yml` hardcode a deepseek `apiKey` directly in the YAML, and it is already committed in git history — rotate it before sharing. `gzh_promptfoo_v1_1.yml` does it correctly via `apiKeyEnvar: ARK_API_KEY` + `.env`; prefer that pattern.
-- Only `promptfooconfig.yaml` scores anything: `gzh_promptfoo.yml:42-90`'s `defaultTest.assert` is entirely commented out; `v1` / `v1_1` have no assertions at all.
-- `promptfooconfig.yaml`'s second and third tests reuse the rubric by saying "沿用上面完全相同的5维度打分rubric" — the `value` text is abbreviated but relies on the first test's full rubric. Keep them in sync if you edit the rubric.
-- `max_tokens` differs wildly: 1200 in `promptfooconfig.yaml` vs 120000 in all `gzh_promptfoo*.yml` — tune per experiment; 120000 looks like a copy-paste artifact for short posts.
-- In `gzh_promptfoo.yml` the prompt files use `{{news}}` / `{{market}}`, but the tests supply `news: ""` (first case) or `user_input` (other cases). `{{market}}` is never supplied and `user_input` is never referenced, so those placeholders silently render empty.
-- The judge provider equals the tested provider in every config (self-grading), so score discrimination is questionable.
-- The prompt schema is declared via `# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json` in the `gzh_promptfoo*.yml` files; use it for autocomplete in editors.
-- `AGENTS.md` and `docs/` are currently untracked by git; a fresh clone only has `CODEBUDDY.md`.
+## Secrets / legacy
+
+- New configs contain **no hardcoded keys**: deepseek reads `DEEPSEEK_API_KEY`, Ark uses `apiKeyEnvar: ARK_API_KEY` + `apiBaseUrl`. Both come from `.env` (or CI secrets).
+- `legacy/promptfooconfig.yaml` and `legacy/test.yml` had a hardcoded deepseek key; it was **scrubbed to `apiKeyEnvar`** and moved into `.env`. The value remains in **git history** — rotate it at the provider. Do not rewrite history without asking.
+- `legacy/` is for archaeology only. Do not copy its `{{market}}` prompts, commented-out asserts, self-grading judge, or `max_tokens: 120000` into new configs.
+- `docs/practice.md` (Langfuse + `import` aggregation) and `docs/prompt-eval-spec.md` ("尚未落地" draft) were archived to `legacy/docs/`; both contradict or predate the landed structure.
+
+## Spec rules that still apply
+
+One capability one suite; assertions layered in `defaultTest.assert`; deterministic assertions before LLM judge; judge ≠ tested model; isolated cache; A/B varies only one dimension (in `writer.yaml`: 2 prompts × 1 provider); bad cases回灌 as JSONL samples; redteam only warns; never lower a threshold to hide a regression (fix the prompt or add samples instead). `prompts/` is the only authoritative prompt source; promptfoo only runs tests.

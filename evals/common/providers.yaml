@@ -1,0 +1,33 @@
+# 共用 provider 定义 —— 全工程唯一同步来源（AGENTS.md §9.3）
+#
+# promptfoo 0.125.1 要求 providers 必须是数组，且不支持 `providers: file://...yaml`，
+# 因此各 suite 内联下面两段定义，并以本文件为同步来源；禁止各 suite 自行演化温度/超时。
+# 密钥一律走环境变量：promptfoo 启动时会自动从 cwd 的 .env 加载（缺失时静默跳过）。
+
+# 被测模型
+tested: &tested
+  id: deepseek:deepseek-v4-flash
+  label: deepseek-v4-flash
+  config:
+    temperature: 0.2
+    max_tokens: 8000
+    top_p: 0.2
+    showThinking: false
+    # DEEPSEEK_API_KEY 由 provider 自动读取，不在此写 key
+
+# 评分裁判：与被测模型不同，避免自评自判（AGENTS.md 铁律 5）
+judge: &judge
+  id: openai:chat:doubao-seed-evolving
+  config:
+    apiBaseUrl: https://ark.cn-beijing.volces.com/api/plan/v3
+    apiKeyEnvar: ARK_API_KEY
+    temperature: 0
+    showThinking: false
+
+# suite 内联示例（路径基准为 evals/suites/）：
+# providers:
+#   - <<: *tested
+# defaultTest:
+#   options:
+#     provider: *judge
+#     rubricPrompt: file://../graders/judge-prompt-writer.json

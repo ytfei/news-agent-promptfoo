@@ -1,0 +1,2 @@
+{"description":"冒烟｜开篇150字（内联短输入）","vars":{"news":"任务：写公众号开篇150字，主题《大模型幻觉对投研的致命影响》。要求：不用概念直接开场，从真实工程观测场景切入，自然引出主题，不要烂大街套话。"},"expected":"约150字开篇，第一人称观测感，无套话","metadata":{"capability":"gzh.writer","case_type":"smoke","category":"开篇","risk":"low","source":"manual"}}
+{"description":"冒烟｜信号简报素材（验证 file:// 解析）","vars":{"news":"file://../datasets/writer/fixtures/信号简报_20260917.md"},"expected":"素材能经 file:// 正确加载并渲染进 prompt，输出非空","metadata":{"capability":"gzh.writer","case_type":"smoke","category":"简报写作","risk":"low","source":"manual"}}

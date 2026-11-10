@@ -1,0 +1,28 @@
+# 全工程提示词索引（AGENTS.md §3.3）
+# 注意：CI 与 scripts/run-all.sh 显式列出下面全部 suite，不从本文件推导——
+# 否则只有 1 条登记时 smoke / judge-anchors / redteam 永远不会被跑到。
+#
+# 本项目扩展：suites 为列表（AGENTS.md 示例为单值 suite）；无 output_schema，
+# 因为输出是公众号散文而非结构化 JSON，结构校验由 not_empty / 单条长度断言承担。
+
+prompts:
+  - id: gzh.writer
+    path: prompts/gzh.writer/
+    suites:
+      - evals/suites/writer.yaml
+      - evals/suites/smoke.yaml
+      - evals/suites/judge-anchors.yaml
+      - evals/suites/redteam.yaml
+    owner: mason
+    risk: medium
+    # 0.8 等价于 5 维度 /10 打分通过线 8/10（llm-rubric threshold: 8）
+    pass_threshold: 0.8
+    rubric: evals/graders/rubric-writer.txt
+    judge_prompt: evals/graders/judge-prompt-writer.json
+    datasets:
+      - evals/datasets/writer/golden.jsonl
+      - evals/datasets/writer/boundary.jsonl
+      - evals/datasets/writer/redteam.jsonl
+      - evals/datasets/writer/smoke.jsonl
+    depends_on: []
+    envs: [dev, prod]

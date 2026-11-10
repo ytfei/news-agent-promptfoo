@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://promptfoo.dev/config-schema.json
+description: "半程观测录 — 本地极小自检（2 条，验证 file:// 与判分链路）"
+tags:
+  capability: gzh.writer
+  kind: smoke
+
+prompts:
+  - file://../../prompts/gzh.writer/v2.json
+
+providers:
+  - id: deepseek:deepseek-v4-flash
+    label: deepseek-v4-flash
+    config:
+      temperature: 0.2
+      max_tokens: 8000
+      top_p: 0.2
+      showThinking: false
+
+tests:
+  - file://../datasets/writer/smoke.jsonl
+
+# 与 writer.yaml 保持同一套全局断言，确保 smoke 覆盖完整链路
+defaultTest:
+  options:
+    provider:
+      id: openai:chat:doubao-seed-evolving
+      config:
+        apiBaseUrl: https://ark.cn-beijing.volces.com/api/plan/v3
+        apiKeyEnvar: ARK_API_KEY
+        temperature: 0
+        showThinking: false
+    rubricPrompt: file://../graders/judge-prompt-writer.json
+  assert:
+    - type: javascript
+      value: file://../common/forbidden-marketing-words.js
+      metric: no_marketing_words
+    - type: javascript
+      value: file://../common/forbidden-investment-advice.js
+      metric: no_investment_advice
+    - type: javascript
+      value: "typeof output === 'string' && output.length > 20"
+      metric: not_empty
+    - type: llm-rubric
+      value: file://../graders/rubric-writer.txt
+      threshold: 8
+      metric: rubric_quality
+
+commandLineOptions:
+  maxConcurrency: 3
+  cache: true
